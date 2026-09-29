@@ -21,9 +21,7 @@ from docpatch.config import DocPatchConfig, QueryEncoderConfig, ReasoningAdapter
 from docpatch.evaluation.evaluate_qa import build_pipeline
 from docpatch.knowledge_bank import load_d2l_model, text_to_lora_record
 
-from docpatch.query_encoder import QueryProjector
-from docpatch.lora_sketch import LoRAFeatureProjector
-from docpatch.router import DocPatchRouter
+
 
 D2L_CHECKPOINT = "/path/to/hypernet"  # frozen Doc-to-LoRA hypernetwork + base LLM
 
@@ -65,6 +63,7 @@ bank = []
 TEXTS = [
     "The Zorblax Institute was founded in 1987 in Lisbon by Dr. Maria Costa.",
     "The Zorblax Institute's flagship product is the Quill-9 synthesizer.",
+    "The Zorblax Institute is famous for its innovative research in artificial intelligence.",
 ]
 
 # Convert the custom texts to LoRA records and add them to the bank.
