@@ -88,12 +88,29 @@ def run_ground_truth_lora(model, tokenizer, dataset, bank: KnowledgeBank, reason
     return preds
 
 
-def build_pipeline(model, tokenizer, router_ckpt_path, reasoning_ckpt_path, config: DocPatchConfig) -> DocPatchPipeline:
+def _load_weights(module, path, key: str, device) -> None:
+    """Load ``module`` from ``path``: either a checkpoint dict holding ``key`` or a raw state_dict."""
+    ckpt = torch.load(path, map_location=device, weights_only=False)
+    module.load_state_dict(ckpt[key] if key in ckpt else ckpt)
+
+
+def build_pipeline(
+    model,
+    tokenizer,
+    router_ckpt_path,
+    reasoning_ckpt_path,
+    config: DocPatchConfig,
+    query_projector_ckpt_path=None,
+    lora_projector_ckpt_path=None,
+) -> DocPatchPipeline:
     """Build query encoder + router + LoRA projector + reasoning adapter.
 
-    Checkpoint paths of ``None`` mean random initialization. The bank is not part of
-    the pipeline: pass a list of ``BankRecord`` to ``pipeline.answer(question, bank)``.
-    Bank records must be built with ``sketch_dim=config.knowledge_bank.sketch_dim``.
+    Checkpoint paths of ``None`` mean random initialization. ``router_ckpt_path`` is the
+    file written by ``train_router.py`` (router + query projector + LoRA projector). The
+    two projectors can also be loaded from their own files, which take precedence over
+    the router checkpoint. The bank is not part of the pipeline: pass a list of
+    ``BankRecord`` to ``pipeline.answer(question, bank)``. Bank records must be built with
+    ``sketch_dim=config.knowledge_bank.sketch_dim``.
     """
     # Sketch feature size: one sketch_dim x sketch_dim sketch per adapted module (Appendix A.3).
     feature_dim = len(model.hypernet.target_modules) * config.knowledge_bank.sketch_dim ** 2
@@ -107,9 +124,17 @@ def build_pipeline(model, tokenizer, router_ckpt_path, reasoning_ckpt_path, conf
     if router_ckpt_path is not None:
         ckpt = torch.load(router_ckpt_path, map_location=model.device, weights_only=False)
         router.load_state_dict(ckpt["router"])
-        query_projector.load_state_dict(ckpt["query_projector"])
-        lora_projector.load_state_dict(ckpt["lora_projector"])
+        # if "query_projector" in ckpt:
+        #     query_projector.load_state_dict(ckpt["query_projector"])
+        # if "lora_projector" in ckpt:
+        #     lora_projector.load_state_dict(ckpt["lora_projector"])
+    if query_projector_ckpt_path is not None:
+        _load_weights(query_projector, query_projector_ckpt_path, "query_projector", model.device)
+    if lora_projector_ckpt_path is not None:
+        _load_weights(lora_projector, lora_projector_ckpt_path, "lora_projector", model.device)
     router.eval()
+    query_projector.eval()
+    lora_projector.eval()
 
     reasoning_adapter = reasoning_adapter_from_hypernet(model, rank=config.reasoning_adapter.rank).to(model.device)
     if reasoning_ckpt_path is not None:

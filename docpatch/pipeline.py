@@ -97,6 +97,28 @@ class DocPatchPipeline:
             )
         return retrieved
 
+    def _with_hypernet_bias(self, tree: dict) -> dict:
+        """Append the hypernetwork's learned head-bias LoRA block, once, unweighted.
+
+        Doc-to-LoRA's ``combine_lora`` adds this extra rank block to every context's
+        LoRA when ``use_bias`` is set (as in the released checkpoints). It is a constant
+        of the hypernetwork, not of any one text, so it is added once here rather than
+        stored per bank record (which would count it once per retrieved LoRA). With a
+        single text in the bank this makes the composed LoRA identical to plain D2L's.
+        """
+
+        if not self.model.hypernet.config.use_bias:
+            return tree
+        bias = self.model.hypernet.get_head_bias()
+        out = {}
+        for module, weights in tree.items():
+            out[module] = {}
+            for key in ("A", "B"):
+                w = weights[key]  # [1, n_layers, rank, dim]
+                b = bias[module][key].detach().to(device=w.device, dtype=w.dtype)  # [n_layers, r, dim]
+                out[module][key] = torch.cat([w, b.unsqueeze(0)], dim=-2)
+        return out
+
     @torch.no_grad()
     def answer(
         self,
@@ -111,6 +133,8 @@ class DocPatchPipeline:
         gates = resolve_conflicts(retrieved, self.config.conflict_resolution)
         mode = composition_mode or self.config.composition.mode
         knowledge_tree = compose(retrieved, gates, mode=mode) if retrieved else None
+        if knowledge_tree is not None:
+            knowledge_tree = self._with_hypernet_bias(knowledge_tree)
         ctx_lora = " ".join([e.text for e in bank])
 
         use_mode = "d2l"
