@@ -45,9 +45,9 @@ tokenizer = get_tokenizer(model.ctx_encoder.base_model.name_or_path)
 
 # ---- pipeline ----
 router_path = "/path/to/router"
-reasoning_ckpt_path = "/path/to/reasoning_adapter"
-lora_projector_path = "/path/to/lora_projector"
-query_projector_path = "/path/to/query_projector"
+reasoning_ckpt_path = "your/path/to/reasoning_adapter"
+lora_projector_path = "your/path/to/lora_projector"
+query_projector_path = "your/path/to/query_projector"
 
 pipeline = build_pipeline(
     model, tokenizer,
@@ -60,16 +60,21 @@ pipeline = build_pipeline(
 
 # ---- bank: a list of LoRAs, each computed from a text by the hypernetwork ----
 bank = []
+
+# Your own custom texts.
 TEXTS = [
     "The Zorblax Institute was founded in 1987 in Lisbon by Dr. Maria Costa.",
     "The Zorblax Institute's flagship product is the Quill-9 synthesizer.",
 ]
+
+# Convert the custom texts to LoRA records and add them to the bank.
 for i, text in enumerate(TEXTS):
     bank.append(text_to_lora_record(model, tokenizer, text, source_id=f"doc{i}",
                                     sketch_dim=config.knowledge_bank.sketch_dim))
 
 
 if __name__ == "__main__":
+    
     QUESTION = "Who founded the Zorblax Institute?"
     result = pipeline.answer(QUESTION, bank)
     print("Q:", QUESTION)
